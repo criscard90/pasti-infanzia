@@ -3,8 +3,9 @@
   const BASE_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/elencoMenuGiorno.do';
   const MUNICIPIO = '8';
   const CICLO = '4';
-  // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev/proxy?target=)
-  const PROXY_URL = 'https://pasti.cristian-cardillo-it.workers.dev/proxy?target=';
+  // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev)
+  // L'URL target verrà passato via header x-target-url invece che nel query string
+  const PROXY_URL = 'https://pasti.cristian-cardillo-it.workers.dev';
 
   // ================= ELEMENTI DOM =================
   const $ = (sel) => document.querySelector(sel);
@@ -144,7 +145,8 @@
 
     const apiDate = isoToApiDate(dateStr);
     const comuneUrl = `${BASE_URL}?municipio=${MUNICIPIO}&cicloScolastico=${CICLO}&giornoSelezionato=${encodeURIComponent(apiDate)}`;
-    const fetchUrl = PROXY_URL + encodeURIComponent(comuneUrl);
+    // L'URL target passa tramite header, non nel query string
+    // Nota: usiamo encodeURIComponent per assicurarsi che non ci sia double-encoding
 
     const tryFetch = async (requestUrl) => {
       const response = await fetch(requestUrl, {
@@ -153,7 +155,8 @@
           'Accept': 'application/json, text/plain, */*',
           'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
           'Referer': 'https://www.comune.roma.it/',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'x-target-url': comuneUrl  // Passiamo l'URL target via header
         }
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -163,7 +166,7 @@
     };
 
     try {
-      const data = await tryFetch(fetchUrl);
+      const data = await tryFetch(PROXY_URL);
 
       const isJson = data.contentType.includes('application/json');
       if (isJson) {
