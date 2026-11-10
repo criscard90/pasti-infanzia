@@ -1,11 +1,10 @@
 (() => {
   // ================= CONFIGURAZIONE =================
-  const BASE_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/elencoMenuGiorno.do';
+  const BASE_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/';
   const MUNICIPIO = '8';
   const CICLO = '4';
-  // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev)
-  // L'URL target verrà passato via header x-target-url invece che nel query string
-  const PROXY_URL = 'https://pasti.cristian-cardillo-it.workers.dev';
+  // Endpoint che restituisce il menu mensile in HTML (più affidabile del proxy)
+  const MENU_MESI_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/loadMenuMese.do';
 
   // ================= ELEMENTI DOM =================
   const $ = (sel) => document.querySelector(sel);
@@ -21,7 +20,17 @@
 
   // ================= DATA =================
   const today = new Date().toISOString().split('T')[0];
+  const todayDate = new Date();
+  const firstDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
+  const lastDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0);
+  
+  // Imposta il valore min/max e genera le opzioni per tutto il mese
+  dateInput.min = firstDayOfMonth.toISOString().split('T')[0];
+  dateInput.max = lastDayOfMonth.toISOString().split('T')[0];
   dateInput.value = today;
+  
+  // Genera un select dropdown con tutti i giorni del mese (opzionale miglioramento UI)
+  // Nota: Mantengo l'input type="date" nativo ma ne potenziamo le limitazioni
 
   function isoToApiDate(iso) {
     const [y, m, d] = iso.split('-');
@@ -143,43 +152,128 @@
     loader.style.display = 'block';
     btn.disabled = true;
 
-    const apiDate = isoToApiDate(dateStr);
-    const comuneUrl = `${BASE_URL}?municipio=${MUNICIPIO}&cicloScolastico=${CICLO}&giornoSelezionato=${encodeURIComponent(apiDate)}`;
-    // L'URL target passa tramite header, non nel query string
-    // Nota: usiamo encodeURIComponent per assicurarsi che non ci sia double-encoding
+    // Usa la data selezionata dall'input, altrimenti oggi
+    const selectedDate = dateInput.value || dateStr;
+    const dateToUse = selectedDate || today;
 
-    const tryFetch = async (requestUrl) => {
-      const response = await fetch(requestUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-          'Referer': 'https://www.comune.roma.it/',
-          'Cache-Control': 'no-cache',
-          'x-target-url': comuneUrl  // Passiamo l'URL target via header
-        }
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
-      if (!text || !text.trim()) throw new Error('Risposta vuota');
-      return { text, contentType: response.headers.get('content-type') || '' };
-    };
+    // Fai scraping dell'endpoint menù mensile (HTML affidabile, no CORS issues)
+    const fetchUrl = MENU_MESI_URL + `?municipio=${MUNICIPIO}&cicloScolastico=${CICLO}&dataSelezionata=${dateToUse}`;
 
     try {
-      const data = await tryFetch(PROXY_URL);
+      const response = await fetch(fetchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept': 'text/html, text/plain, */*',
+          'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+          'Referer': 'https://www.comune.roma.it/',
+          'Cache-Control': 'no-cache'
+        }
+      });
 
-      const isJson = data.contentType.includes('application/json');
-      if (isJson) {
-        try {
-          renderJson(JSON.parse(data.text), dateLabel(dateStr));
-        } catch {
-          renderHtml(extractTextFromHtml(data.text), dateLabel(dateStr));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const html = await response.text();
+
+      if (!html || !html.trim()) throw new Error('Risposta vuota');
+
+      // Parsing HTML per estrarre i menu giornalieri
+      // Il formato è: "Giorno DD/MM/AAAA" seguito dai pasti
+      const today = new Date(dateToUse);
+      const giorno = String(today.getDate()).padStart(2, '0');
+      const mese = String(today.getMonth() + 1).padStart(2, '0');
+      const anno = today.getFullYear();
+      const todayKey = `${giorno}/${mese}/${anno}`;
+
+      // Estrae tutti i blocchi giorno dalla HTML
+      // Formato: "Lunedì 02/11/2026" o "Martedì 10/11/2026" ecc.
+      const giornoRegex = /(Lunedi|Martedi|Mercoledi|Giovedi|Venerdì|Sabato|Domenica)\s+(\d{2}\/\d{2}\/\d{4})/g;
+      const giorniTrovati = [];
+
+      let match;
+      while ((match = giornoRegex.exec(html)) !== null) {
+        giorniTrovati.push({
+          nomeGiorno: match[1],
+          data: match[2],
+          testoCompleto: match[0]
+        });
+      }
+
+      // Cerca la data selezionata nella lista
+      const menuGiorno = giorniTrovati.find(g => g.data === todayKey);
+
+      // Estrai i pasti dal testo del giorno trovato
+      let lines = [];
+      if (menuGiorno) {
+        // Il testo del giorno include tutto, dobbiamo estrarre le linee del menu
+        // Formato: "Menu mensile Spuntino ...", "Menu mensile Pranzo ...", ecc.
+        const pastiRegex = /Menu mensile (Spuntino|Pranzo|Contorno|Frutta|Note)[^\n]*/g;
+        let pastiMatch;
+        while ((pastiMatch = pastiRegex.exec(menuGiorno.testoCompleto)) !== null) {
+          lines.push(pastiMatch[1] + ': ' + pastiMatch[0].replace('Menu mensile ', '').trim());
+        }
+        // Se non trova pasti specifici, usa tutto il testo
+        if (lines.length === 0) {
+          lines = extractTextFromHtml(menuGiorno.testoCompleto);
         }
       } else {
-        renderHtml(extractTextFromHtml(data.text), dateLabel(dateStr));
+        lines = ['Nessun dato disponibile per questa data.'];
       }
+
+      // Determina l'etichetta da mostrare
+      let label;
+      if (menuGiorno) {
+        label = `${menuGiorno.nomeGiorno} ${menuGiorno.data}`;
+      } else {
+        label = 'Menù Mese Corrent';
+      }
+
+      // Se non c'è dati, mostra messaggio
+      if (!menuGiorno) {
+        renderHtml(['Nessun dato disponibile per questa data.'], label);
+        return;
+      }
+
+      // Renderizza il menù nella UI standard
+      menuDate.textContent = label;
+      menuGrid.innerHTML = '';
+
+      const styles = ['var(--cream)', '#dbeafe', 'var(--mint)', 'var(--pink-light)', 'var(--blue-light)'];
+
+      lines.forEach((line, i) => {
+        const item = document.createElement('div');
+        item.className = 'menu-item';
+        item.style.cssText = `background: ${styles[i % styles.length]}; border-color: transparent;`;
+        item.innerHTML = `
+          <span class="emoji">🍽️</span>
+          <span class="item-value">${escapeHtml(line)}</span>
+        `;
+        menuGrid.appendChild(item);
+      });
+
+      resultCard.style.display = 'flex';
+      rawBox.style.display = 'none';
+      rawToggle.style.display = 'inline-block';
+
+      // Mostra anche l'indice del mese sotto il menù
+      if (giorniTrovati.length > 0) {
+        const meseInfo = document.createElement('div');
+        meseInfo.style.marginTop = '10px';
+        meseInfo.style.fontSize = '0.8em';
+        meseInfo.style.color = '#666';
+        meseInfo.textContent = `Menu mese corrente: ${giorniTrovati.length} giorni disponibili (seleziona una data sopra)`;
+        menuGrid.appendChild(meseInfo);
+      }
+
     } catch (err) {
-      console.error(err);
+      console.error('Errore scraping menù mensile:', err);
+      setError(true, 'Non sono riuscita a caricare il menù. Verifica la connessione e riprova.');
+    } finally {
+      loader.style.display = 'none';
+      loader.textContent = 'Caricamento menù…';
+      btn.disabled = false;
+    }
+  }
+      console.error('Errore scraping menù mensile:', err);
       setError(true, 'Non sono riuscita a caricare il menù. Verifica la connessione e riprova.');
     } finally {
       loader.style.display = 'none';
