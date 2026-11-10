@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍽️ Pasti Infanzia - Menù Scuola</title>
+  <meta name="description" content="Menù giornaliero della scuola dell'infanzia - Comune di Roma, Municipio 8" />
+  <meta name="theme-color" content="#ec4899" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🍽️ Pasti Infanzia</h1>
+    <p>Menù giornaliero · Scuola dell'infanzia · Municipio 6 (Roma)</p>
+  </header>
+
+  <main>
+    <section class="card control-card">
+      <label for="date">📅 Scegli la data</label>
+      <input type="date" id="date" />
+      <button class="btn" id="btn">🔍 Visualizza menù</button>
+      <div class="loader" id="loader"><span class="spinner"></span>Caricamento menù…</div>
+    </section>
+
+    <div id="error"></div>
+
+    <section id="resultCard" class="card result-card">
+      <div id="menuDate" class="menu-date"></div>
+      <div id="menuGrid" class="menu-grid"></div>
+      <div class="raw-toggle" id="rawToggle">
+        <button id="rawToggleBtn">Visualizza sorgente</button>
+      </div>
+      <pre id="rawBox" class="raw-box"></pre>
+    </section>
+  </main>
+
+  <footer>
+    Realizzato con ❤️ per i genitori · Dati da <a href="https://www.comune.roma.it" target="_blank" rel="noopener">comune.roma.it</a><br />
+    Fonte: <a href="https://www.comune.roma.it/servizi/mesis-portal-reports-war/elencoMenuGiorno.do" target="_blank" rel="noopener">MESIS Portal Reports</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
