@@ -4,7 +4,7 @@
   const MUNICIPIO = '8';
   const CICLO = '4';
   // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev/proxy?target=)
-  const PROXY_URL = 'https://pasti-proxy.tuonome.workers.dev/proxy?target=';
+  const PROXY_URL = 'https://pasti.cristian-cardillo-it.workers.dev/proxy?target=';
 
   // ================= ELEMENTI DOM =================
   const $ = (sel) => document.querySelector(sel);
