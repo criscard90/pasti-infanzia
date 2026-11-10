@@ -147,7 +147,15 @@
     const fetchUrl = PROXY_URL + encodeURIComponent(comuneUrl);
 
     const tryFetch = async (requestUrl) => {
-      const response = await fetch(requestUrl);
+      const response = await fetch(requestUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+          'Referer': 'https://www.comune.roma.it/',
+          'Cache-Control': 'no-cache'
+        }
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
       if (!text || !text.trim()) throw new Error('Risposta vuota');
