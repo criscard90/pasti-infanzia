@@ -273,14 +273,6 @@
       btn.disabled = false;
     }
   }
-      console.error('Errore scraping menù mensile:', err);
-      setError(true, 'Non sono riuscita a caricare il menù. Verifica la connessione e riprova.');
-    } finally {
-      loader.style.display = 'none';
-      loader.textContent = 'Caricamento menù…';
-      btn.disabled = false;
-    }
-  }
 
   // ================= EVENTI =================
   btn.addEventListener('click', () => loadMenu(dateInput.value));
