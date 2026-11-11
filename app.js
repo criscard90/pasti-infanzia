@@ -5,7 +5,7 @@
   const CICLO = '4';
   // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev)
   // L'URL target verrà passato via header x-target-url invece che nel query string
-  const PROXY_URL = 'https://pasti.cristian-cardillo-it.workers.dev';
+  const PROXY_URL = 'https://pasti-infanzia.cristian-cardillo-it.workers.dev';
 
   // ================= ELEMENTI DOM =================
   const $ = (sel) => document.querySelector(sel);
