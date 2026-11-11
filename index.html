@@ -20,7 +20,12 @@
   <main>
     <section class="card control-card">
       <label for="date">📅 Scegli la data</label>
-      <input type="date" id="date" />
+      <div class="date-control">
+        <input type="text" id="date" inputmode="numeric" placeholder="gg/mm/aaaa" aria-describedby="dateHint" autocomplete="off" />
+        <button type="button" class="date-picker-btn" id="datePickerBtn" aria-label="Apri calendario">📅</button>
+        <input type="date" id="datePicker" lang="it" tabindex="-1" aria-hidden="true" />
+      </div>
+      <small id="dateHint">Formato: gg/mm/aaaa</small>
       <button class="btn" id="btn">🔍 Visualizza menù</button>
       <div class="loader" id="loader"><span class="spinner"></span>Caricamento menù…</div>
     </section>
@@ -28,6 +33,7 @@
     <div id="error"></div>
 
     <section id="resultCard" class="card result-card">
+      <button class="btn overview-btn" id="overviewBtn" type="button">📊 Overview del mese</button>
       <div id="menuDate" class="menu-date"></div>
       <div id="menuGrid" class="menu-grid"></div>
       <div class="raw-toggle" id="rawToggle">
@@ -39,7 +45,7 @@
 
   <footer>
     Realizzato con ❤️ per i genitori · Dati da <a href="https://www.comune.roma.it" target="_blank" rel="noopener">comune.roma.it</a><br />
-    Fonte: <a href="https://www.comune.roma.it/servizi/mesis-portal-reports-war/elencoMenuGiorno.do" target="_blank" rel="noopener">MESIS Portal Reports</a>
+    Fonte: <a href="https://www.comune.roma.it/servizi/mesis-portal-reports-war/loadMenuMese.do" target="_blank" rel="noopener">MESIS Portal Reports</a>
   </footer>
 
   <script src="app.js"></script>

@@ -1,15 +1,15 @@
 (() => {
-  // ================= CONFIGURAZIONE =================
-  const BASE_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/elencoMenuGiorno.do';
+  const BASE_URL = 'https://www.comune.roma.it/servizi/mesis-portal-reports-war/loadMenuMese.do';
+  const PROXY_URL = 'https://pasti-infanzia.cristian-cardillo-it.workers.dev';
   const MUNICIPIO = '8';
   const CICLO = '4';
-  // Sostituisci con l'URL del tuo Cloudflare Worker (es. https://pasti-proxy.tuonome.workers.dev)
-  // L'URL target verrà passato via header x-target-url invece che nel query string
-  const PROXY_URL = 'https://pasti-infanzia.cristian-cardillo-it.workers.dev';
+  const CACHE_PREFIX = 'pasti-infanzia-menu-mese-v1';
+  const CACHE_TTL = 12 * 60 * 60 * 1000;
 
-  // ================= ELEMENTI DOM =================
-  const $ = (sel) => document.querySelector(sel);
+  const $ = (selector) => document.querySelector(selector);
   const dateInput = $('#date');
+  const datePicker = $('#datePicker');
+  const datePickerBtn = $('#datePickerBtn');
   const btn = $('#btn');
   const loader = $('#loader');
   const errorBox = $('#error');
@@ -18,193 +18,347 @@
   const menuGrid = $('#menuGrid');
   const rawBox = $('#rawBox');
   const rawToggle = $('#rawToggle');
+  const rawToggleBtn = $('#rawToggleBtn');
+  const overviewBtn = $('#overviewBtn');
+  const memoryCache = new Map();
+  let currentMonthHtml = '';
+  let overviewVisible = false;
 
-  // ================= DATA =================
-  const today = new Date().toISOString().split('T')[0];
-  const todayDate = new Date();
-  const firstDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
-  const lastDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0);
-  
-  // Imposta il valore min/max e genera le opzioni per tutto il mese
-  dateInput.min = firstDayOfMonth.toISOString().split('T')[0];
-  dateInput.max = lastDayOfMonth.toISOString().split('T')[0];
-  dateInput.value = today;
-  
-  // Genera un select dropdown con tutti i giorni del mese (opzionale miglioramento UI)
-  // Nota: Mantengo l'input type="date" nativo ma ne potenziamo le limitazioni
-
-  function isoToApiDate(iso) {
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
+  function localIsoDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  function dateLabel(iso) {
-    const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString('it-IT', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  function isoToApiDate(isoDate) {
+    const [year, month, day] = isoDate.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  function italianDateToIso(value) {
+    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+    const [, day, month, year] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (
+      date.getFullYear() !== Number(year) ||
+      date.getMonth() !== Number(month) - 1 ||
+      date.getDate() !== Number(day)
+    ) return null;
+    return localIsoDate(date);
+  }
+
+  function isoToItalianDate(isoDate) {
+    const [year, month, day] = isoDate.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  function dateLabel(isoDate) {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('it-IT', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
     });
   }
 
-  // ================= UTILITY =================
-  function escapeHtml(text) {
-    const d = document.createElement('div');
-    d.textContent = text === null || text === undefined ? '' : String(text);
-    return d.innerHTML;
+  function setError(message = '') {
+    errorBox.textContent = message;
+    errorBox.style.display = message ? 'block' : 'none';
   }
 
-  function setError(show, msg) {
-    errorBox.style.display = show ? 'block' : 'none';
-    if (show) errorBox.textContent = msg;
+  function escapeHtml(value) {
+    const element = document.createElement('div');
+    element.textContent = value == null ? '' : String(value);
+    return element.innerHTML;
   }
 
-  function extractTextFromHtml(html) {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    div.querySelectorAll('script, style').forEach((el) => el.remove());
-    const text = div.innerText || div.textContent || '';
-    return text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  function cacheKey(month) {
+    return `${CACHE_PREFIX}-${MUNICIPIO}-${CICLO}-${month}`;
   }
 
-  // ================= RENDERING MENÙ (JSON) =================
-  const FIELDS = [
-    { key: 'primo', label: 'Primo', emoji: '🍝' },
-    { key: 'secondo', label: 'Secondo', emoji: '🍗' },
-    { key: 'contorno', label: 'Contorno', emoji: '🥗' },
-    { key: 'frutta', label: 'Frutta', emoji: '🍎' },
-    { key: 'note', label: 'Note', emoji: '📝' },
-  ];
+  function readMonthCache(month) {
+    const key = cacheKey(month);
+    if (memoryCache.has(key)) return memoryCache.get(key);
 
-  function renderJson(data, label) {
-    let menu = data;
-    if (Array.isArray(data)) menu = data.find((x) => x && typeof x === 'object') || data[0] || {};
-    if (!menu || typeof menu !== 'object') {
-      renderHtml([String(data)], label);
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved) return null;
+      const entry = JSON.parse(saved);
+      if (typeof entry.html !== 'string' || typeof entry.savedAt !== 'number') return null;
+      memoryCache.set(key, entry);
+      return entry;
+    } catch (error) {
+      console.warn('Impossibile leggere la cache locale del menu:', error);
+      return null;
+    }
+  }
+
+  function saveMonthCache(month, html) {
+    const entry = { html, savedAt: Date.now() };
+    const key = cacheKey(month);
+    memoryCache.set(key, entry);
+    try {
+      localStorage.setItem(key, JSON.stringify(entry));
+    } catch (error) {
+      console.warn('Impossibile salvare la cache locale del menu:', error);
+    }
+    return entry;
+  }
+
+  function parseMonthMenu(html) {
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const menuSection = document.querySelector('#zonaMenuMese');
+    if (!menuSection) {
+      throw new Error('La pagina ricevuta non contiene il menu mensile.');
+    }
+
+    const days = {};
+    let currentDay = null;
+    let currentMeal = null;
+
+    menuSection.querySelectorAll('table').forEach((table) => {
+      const cells = Array.from(table.querySelectorAll('td'))
+        .map((cell) => cell.textContent.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      const text = cells.join(' ').trim();
+      if (!text) return;
+
+      const dateMatch = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+      if (dateMatch) {
+        const [, day, month, year] = dateMatch;
+        const isoDate = `${year}-${month}-${day}`;
+        currentDay = days[isoDate] = { meals: [], notes: [] };
+        currentMeal = null;
+        return;
+      }
+
+      if (!currentDay) return;
+
+      const heading = table.querySelector('strong');
+      if (heading) {
+        const label = heading.textContent.replace(/\s+/g, ' ').trim();
+        currentMeal = { label, items: [] };
+        currentDay.meals.push(currentMeal);
+        return;
+      }
+
+      if (currentMeal) currentMeal.items.push(text);
+      else currentDay.notes.push(text);
+    });
+
+    if (Object.keys(days).length === 0) {
+      throw new Error('Non è stato possibile trovare le date del menu mensile.');
+    }
+    return days;
+  }
+
+  function renderMenu(html, isoDate) {
+    const days = parseMonthMenu(html);
+    const day = days[isoDate];
+    currentMonthHtml = html;
+    overviewVisible = false;
+    overviewBtn.textContent = '📊 Overview del mese';
+    menuDate.textContent = dateLabel(isoDate);
+    menuGrid.replaceChildren();
+
+    if (!day || (day.meals.length === 0 && day.notes.length === 0)) {
+      const message = document.createElement('div');
+      message.className = 'note-box';
+      message.textContent = 'Nessun menù disponibile per la data selezionata.';
+      menuGrid.appendChild(message);
+    } else {
+      day.meals.forEach((meal) => {
+        if (meal.items.length === 0) return;
+        const item = document.createElement('div');
+        item.className = 'menu-item';
+        item.innerHTML = `
+          <span class="emoji">🍽️</span>
+          <span class="item-label">${escapeHtml(meal.label)}</span>
+          <span class="item-value">${meal.items.map(escapeHtml).join('<br>')}</span>
+        `;
+        menuGrid.appendChild(item);
+      });
+
+      day.notes.forEach((note) => {
+        const item = document.createElement('div');
+        item.className = 'note-box';
+        item.textContent = note;
+        menuGrid.appendChild(item);
+      });
+    }
+
+    rawBox.textContent = html;
+    rawBox.style.display = 'none';
+    rawToggle.style.display = 'block';
+    rawToggleBtn.textContent = 'Visualizza sorgente';
+    resultCard.style.display = 'flex';
+  }
+
+  function renderOverview() {
+    if (!currentMonthHtml) return;
+    const days = parseMonthMenu(currentMonthHtml);
+    const foods = new Map();
+
+    Object.entries(days).forEach(([isoDate, day]) => {
+      day.meals.forEach((meal) => {
+        const isLunch = meal.label.trim().toLocaleLowerCase('it-IT') === 'pranzo';
+        meal.items.forEach((food) => {
+          const normalized = food.replace(/\s+/g, ' ').trim();
+          const key = normalized.toLocaleLowerCase('it-IT');
+          if (!normalized || (isLunch && /^(pane|frutta)\b/i.test(normalized))) return;
+          if (!foods.has(key)) foods.set(key, { name: normalized, dates: [] });
+          const dates = foods.get(key).dates;
+          if (dates[dates.length - 1] !== isoDate) dates.push(isoDate);
+        });
+      });
+    });
+
+    const sortedFoods = Array.from(foods.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, 'it')
+    );
+    const [year, month, day] = Object.keys(days)[0].split('-').map(Number);
+    const monthLabel = new Date(year, month - 1, day).toLocaleDateString('it-IT', {
+      month: 'long',
+      year: 'numeric'
+    });
+
+    menuDate.textContent = `Overview · ${monthLabel}`;
+    menuGrid.replaceChildren();
+    if (sortedFoods.length === 0) {
+      const message = document.createElement('div');
+      message.className = 'note-box';
+      message.textContent = 'Non ci sono pietanze da riepilogare per questo mese.';
+      menuGrid.appendChild(message);
+    } else {
+      sortedFoods.forEach((food) => {
+        const item = document.createElement('article');
+        item.className = 'overview-item';
+        const name = document.createElement('strong');
+        name.className = 'overview-food';
+        name.textContent = food.name;
+        const dates = document.createElement('span');
+        dates.className = 'overview-dates';
+        dates.textContent = food.dates.map(isoToItalianDate).join(' · ');
+        item.append(name, dates);
+        menuGrid.appendChild(item);
+      });
+    }
+
+    overviewVisible = true;
+    overviewBtn.textContent = '🍽️ Torna al menù del giorno';
+  }
+
+  async function fetchMonth(isoDate) {
+    const targetUrl = new URL(BASE_URL);
+    targetUrl.searchParams.set('municipio', MUNICIPIO);
+    targetUrl.searchParams.set('cicloScolastico', CICLO);
+    targetUrl.searchParams.set('dataSelezionata', isoToApiDate(isoDate));
+
+    const response = await fetch(PROXY_URL, {
+      headers: {
+        Accept: 'text/html, application/xhtml+xml',
+        'x-target-url': targetUrl.toString()
+      },
+      cache: 'no-store'
+    });
+    if (!response.ok) throw new Error(`Il servizio ha risposto con HTTP ${response.status}.`);
+
+    const html = await response.text();
+    if (!html.trim()) throw new Error('Il servizio ha restituito una risposta vuota.');
+    parseMonthMenu(html);
+    return html;
+  }
+
+  async function loadMenu(isoDate) {
+    if (!isoDate) {
+      setError('Seleziona una data per visualizzare il menù.');
       return;
     }
 
-    menuDate.textContent = label;
-    menuGrid.innerHTML = '';
+    setError('');
+    btn.disabled = true;
+    dateInput.disabled = true;
+    loader.style.display = 'block';
+    const month = isoDate.slice(0, 7);
+    const cached = readMonthCache(month);
 
-    let renderedAny = false;
-    FIELDS.forEach((field) => {
-      const val = menu[field.key];
-      if (val === undefined || val === null || String(val).trim() === '') return;
-      renderedAny = true;
-      const item = document.createElement('div');
-      item.className = 'menu-item';
-      item.innerHTML = `
-        <span class="emoji">${field.emoji}</span>
-        <span class="item-label">${escapeHtml(field.label)}</span>
-        <span class="item-value">${escapeHtml(String(val))}</span>
-      `;
-      menuGrid.appendChild(item);
-    });
+    if (cached) renderMenu(cached.html, isoDate);
+    else resultCard.style.display = 'none';
 
-    if (!renderedAny) {
-      const item = document.createElement('div');
-      item.className = 'menu-item';
-      item.style.background = '#f8fafc';
-      item.style.borderColor = '#cbd5e1';
-      item.style.color = '#334155';
-      item.innerHTML = `
-        <span class="emoji">📦</span>
-        <span class="item-label">Dati ricevuti</span>
-        <span class="item-value">${escapeHtml(JSON.stringify(menu, null, 2))}</span>
-      `;
-      menuGrid.appendChild(item);
+    const isFresh = cached && Date.now() - cached.savedAt < CACHE_TTL;
+    if (isFresh) {
+      loader.style.display = 'none';
+      btn.disabled = false;
+      dateInput.disabled = false;
+      return;
     }
 
-    resultCard.style.display = 'flex';
-    rawBox.style.display = 'none';
-    rawToggle.style.display = 'inline-block';
-    rawBox.textContent = JSON.stringify(data, null, 2);
-  }
-
-  // ================= RENDERING MENÙ (HTML / testo) =================
-  function renderHtml(lines, label) {
-    menuDate.textContent = label;
-    menuGrid.innerHTML = '';
-
-    if (lines.length === 0) lines = ['Nessun dato disponibile per questa data.'];
-
-    const styles = ['var(--cream)', '#dbeafe', 'var(--mint)', 'var(--pink-light)', 'var(--blue-light)'];
-    lines.forEach((line, i) => {
-      const item = document.createElement('div');
-      item.className = 'menu-item';
-      item.style.cssText = `background: ${styles[i % styles.length]}; border-color: transparent;`;
-      item.innerHTML = `
-        <span class="emoji">🍽️</span>
-        <span class="item-value">${escapeHtml(line)}</span>
-      `;
-      menuGrid.appendChild(item);
-    });
-
-    resultCard.style.display = 'flex';
-    rawBox.style.display = 'none';
-    rawToggle.style.display = 'inline-block';
-    rawBox.textContent = lines.join('\n');
-  }
-
-  // ================= FETCH =================
-  async function loadMenu(dateStr) {
-    setError(false, '');
-    resultCard.style.display = 'none';
-    rawBox.style.display = 'none';
-    loader.style.display = 'block';
-    btn.disabled = true;
-
-    const apiDate = isoToApiDate(dateStr);
-    const comuneUrl = `${BASE_URL}?municipio=${MUNICIPIO}&cicloScolastico=${CICLO}&giornoSelezionato=${encodeURIComponent(apiDate)}`;
-    // L'URL target passa tramite header x-target-url, non nel query string
-
-    const tryFetch = async (requestUrl) => {
-      const response = await fetch(requestUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-          'Referer': 'https://www.comune.roma.it/',
-          'Cache-Control': 'no-cache',
-          'x-target-url': comuneUrl  // Passiamo l'URL target via header
-        }
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
-      if (!text || !text.trim()) throw new Error('Risposta vuota');
-      return { text, contentType: response.headers.get('content-type') || '' };
-    };
+    loader.textContent = cached
+      ? 'Aggiornamento del menù salvato…'
+      : 'Caricamento menù…';
 
     try {
-      const data = await tryFetch(PROXY_URL);
-
-      const isJson = data.contentType.includes('application/json');
-      if (isJson) {
-        try {
-          renderJson(JSON.parse(data.text), dateLabel(dateStr));
-        } catch {
-          renderHtml(extractTextFromHtml(data.text), dateLabel(dateStr));
-        }
-      } else {
-        renderHtml(extractTextFromHtml(data.text), dateLabel(dateStr));
-      }
-    } catch (err) {
-      console.error(err);
-      setError(true, 'Non sono riuscita a caricare il menù. Verifica la connessione e riprova.');
+      const html = await fetchMonth(isoDate);
+      saveMonthCache(month, html);
+      renderMenu(html, isoDate);
+    } catch (error) {
+      console.error('Errore durante il caricamento del menu:', error);
+      setError(cached
+        ? 'Connessione non disponibile: è mostrato il menù salvato in precedenza.'
+        : 'Non è stato possibile caricare il menù. Verifica la connessione e riprova.');
     } finally {
       loader.style.display = 'none';
       loader.textContent = 'Caricamento menù…';
       btn.disabled = false;
+      dateInput.disabled = false;
     }
   }
 
-  // ================= EVENTI =================
-  btn.addEventListener('click', () => loadMenu(dateInput.value));
-
-  rawToggle.addEventListener('click', () => {
+  btn.addEventListener('click', () => {
+    const isoDate = italianDateToIso(dateInput.value);
+    if (!isoDate) {
+      setError('Inserisci una data valida nel formato gg/mm/aaaa.');
+      dateInput.focus();
+      return;
+    }
+    datePicker.value = isoDate;
+    loadMenu(isoDate);
+  });
+  dateInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') btn.click();
+  });
+  datePickerBtn.addEventListener('click', () => {
+    if (typeof datePicker.showPicker === 'function') datePicker.showPicker();
+    else {
+      datePicker.focus();
+      datePicker.click();
+    }
+  });
+  datePicker.addEventListener('change', () => {
+    if (!datePicker.value) return;
+    dateInput.value = isoToItalianDate(datePicker.value);
+    setError('');
+    loadMenu(datePicker.value);
+  });
+  overviewBtn.addEventListener('click', () => {
+    if (overviewVisible) {
+      const selectedDate = italianDateToIso(dateInput.value);
+      if (selectedDate) renderMenu(currentMonthHtml, selectedDate);
+      return;
+    }
+    renderOverview();
+  });
+  rawToggleBtn.addEventListener('click', () => {
     const show = rawBox.style.display === 'none';
     rawBox.style.display = show ? 'block' : 'none';
-    rawToggle.querySelector('button').textContent = show ? 'Nascondi sorgente' : 'Visualizza sorgente';
+    rawToggleBtn.textContent = show ? 'Nascondi sorgente' : 'Visualizza sorgente';
   });
 
+  const today = localIsoDate(new Date());
+  dateInput.value = isoToItalianDate(today);
+  datePicker.value = today;
   loadMenu(today);
 })();

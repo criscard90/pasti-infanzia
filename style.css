@@ -89,19 +89,49 @@ main {
   color: var(--ink-soft);
 }
 
-.control-card input[type="date"] {
+.date-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-control input[type="text"] {
+  width: 100%;
   padding: 12px 14px;
   border: 2px solid #ddd6fe;
   border-radius: 12px;
   font-size: 1rem;
   background: var(--purple-light);
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.date-picker-btn {
+  flex: 0 0 48px;
+  height: 48px;
+  border: 2px solid #ddd6fe;
+  border-radius: 12px;
+  background: var(--purple-light);
+  color: var(--ink);
+  font-size: 1.2rem;
   cursor: pointer;
 }
 
-.control-card input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(45%) hue-rotate(180deg);
-  cursor: pointer;
+#datePicker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#dateHint {
+  margin-top: -6px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
 }
 
 .btn {
@@ -175,7 +205,7 @@ main {
 
 .menu-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -192,11 +222,34 @@ main {
   border: 2px solid transparent;
 }
 
-.menu-item:nth-child(1) { background: var(--cream); border-color: #fde047; color: #713f12; }
-.menu-item:nth-child(2) { background: #dbeafe; border-color: #60a5fa; color: #1e3a8a; }
-.menu-item:nth-child(3) { background: var(--mint); border-color: #4ade80; color: #14532d; }
-.menu-item:nth-child(4) { background: var(--pink-light); border-color: #f472b6; color: #9d174d; }
-.menu-item:nth-child(5) { background: var(--blue-light); border-color: #818cf8; color: #3730a3; }
+.menu-item:nth-child(3n + 1) { background: var(--cream); border-color: #fde047; color: #713f12; }
+.menu-item:nth-child(3n + 2) { background: #dbeafe; border-color: #60a5fa; color: #1e3a8a; }
+.menu-item:nth-child(3n) { background: var(--mint); border-color: #4ade80; color: #14532d; }
+
+.overview-btn {
+  margin-bottom: 2px;
+}
+
+.overview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--purple-light);
+  border-left: 4px solid var(--purple);
+}
+
+.overview-food {
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.overview-dates {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
 
 .emoji { font-size: 1.9rem; line-height: 1; }
 
@@ -257,6 +310,6 @@ footer a { color: var(--pink-dark); text-decoration: none; }
 }
 
 @media (max-width: 480px) {
-  .menu-grid { grid-template-columns: 1fr; }
+  .card { padding: 16px 14px; }
   header h1 { font-size: 1.35rem; }
 }
