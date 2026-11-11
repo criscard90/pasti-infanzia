@@ -17,9 +17,13 @@
   const menuDate = $('#menuDate');
   const menuGrid = $('#menuGrid');
   const overviewBtn = $('#overviewBtn');
+  const overviewModes = $('#overviewModes');
+  const groupedViewBtn = $('#groupedViewBtn');
+  const dailyViewBtn = $('#dailyViewBtn');
   const memoryCache = new Map();
   let currentMonthHtml = '';
   let overviewVisible = false;
+  let hasMonthMenu = false;
 
   function localIsoDate(date) {
     const year = date.getFullYear();
@@ -156,7 +160,10 @@
     const days = parseMonthMenu(html);
     const day = days[isoDate];
     currentMonthHtml = html;
+    hasMonthMenu = true;
     overviewVisible = false;
+    overviewModes.hidden = true;
+    overviewBtn.disabled = false;
     overviewBtn.textContent = '📊 Overview del mese';
     menuDate.textContent = dateLabel(isoDate);
     menuGrid.replaceChildren();
@@ -190,9 +197,66 @@
     resultCard.style.display = 'flex';
   }
 
-  function renderOverview() {
+  function renderOverview(mode = 'grouped') {
     if (!currentMonthHtml) return;
     const days = parseMonthMenu(currentMonthHtml);
+    const sortedDays = Object.entries(days).sort(([dateA], [dateB]) => dateA.localeCompare(dateB));
+    overviewModes.hidden = false;
+    groupedViewBtn.classList.toggle('active', mode === 'grouped');
+    groupedViewBtn.setAttribute('aria-pressed', String(mode === 'grouped'));
+    dailyViewBtn.classList.toggle('active', mode === 'daily');
+    dailyViewBtn.setAttribute('aria-pressed', String(mode === 'daily'));
+
+    if (mode === 'daily') {
+      const [year, month, day] = sortedDays[0][0].split('-').map(Number);
+      const monthLabel = new Date(year, month - 1, day).toLocaleDateString('it-IT', {
+        month: 'long',
+        year: 'numeric'
+      });
+      menuDate.textContent = `Menù del mese · ${monthLabel}`;
+      menuGrid.replaceChildren();
+
+      sortedDays.forEach(([isoDate, menu]) => {
+        const daySection = document.createElement('section');
+        daySection.className = 'overview-day';
+        const heading = document.createElement('h3');
+        heading.className = 'overview-day-title';
+        heading.textContent = dateLabel(isoDate);
+        daySection.appendChild(heading);
+
+        menu.meals.forEach((meal) => {
+          if (meal.items.length === 0) return;
+          const mealCard = document.createElement('article');
+          mealCard.className = 'overview-day-meal';
+          const mealHeading = document.createElement('strong');
+          mealHeading.className = 'overview-day-meal-title';
+          mealHeading.textContent = meal.label;
+          const foodList = document.createElement('ul');
+          foodList.className = 'overview-day-foods';
+          meal.items.forEach((food) => {
+            const foodItem = document.createElement('li');
+            foodItem.textContent = food;
+            foodList.appendChild(foodItem);
+          });
+          mealCard.append(mealHeading, foodList);
+          daySection.appendChild(mealCard);
+        });
+
+        menu.notes.forEach((note) => {
+          const noteItem = document.createElement('p');
+          noteItem.className = 'note-box';
+          noteItem.textContent = note;
+          daySection.appendChild(noteItem);
+        });
+
+        menuGrid.appendChild(daySection);
+      });
+
+      overviewVisible = true;
+      overviewBtn.textContent = '🍽️ Torna al menù del giorno';
+      return;
+    }
+
     const meals = new Map();
 
     Object.entries(days).forEach(([isoDate, day]) => {
@@ -214,7 +278,7 @@
       });
     });
 
-    const [year, month, day] = Object.keys(days)[0].split('-').map(Number);
+    const [year, month, day] = sortedDays[0][0].split('-').map(Number);
     const monthLabel = new Date(year, month - 1, day).toLocaleDateString('it-IT', {
       month: 'long',
       year: 'numeric'
@@ -294,18 +358,25 @@
     setError('');
     btn.disabled = true;
     dateInput.disabled = true;
+    overviewBtn.disabled = true;
     loader.style.display = 'block';
     const month = isoDate.slice(0, 7);
     const cached = readMonthCache(month);
 
-    if (cached) renderMenu(cached.html, isoDate);
-    else resultCard.style.display = 'none';
+    if (cached) {
+      renderMenu(cached.html, isoDate);
+      overviewBtn.disabled = true;
+    } else {
+      hasMonthMenu = false;
+      resultCard.style.display = 'none';
+    }
 
     const isFresh = cached && Date.now() - cached.savedAt < CACHE_TTL;
     if (isFresh) {
       loader.style.display = 'none';
       btn.disabled = false;
       dateInput.disabled = false;
+      overviewBtn.disabled = !hasMonthMenu;
       return;
     }
 
@@ -327,6 +398,7 @@
       loader.textContent = 'Caricamento menù…';
       btn.disabled = false;
       dateInput.disabled = false;
+      overviewBtn.disabled = !hasMonthMenu;
     }
   }
 
@@ -364,6 +436,8 @@
     }
     renderOverview();
   });
+  groupedViewBtn.addEventListener('click', () => renderOverview('grouped'));
+  dailyViewBtn.addEventListener('click', () => renderOverview('daily'));
   const today = localIsoDate(new Date());
   dateInput.value = isoToItalianDate(today);
   datePicker.value = today;

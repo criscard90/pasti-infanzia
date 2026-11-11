@@ -27,13 +27,17 @@
       </div>
       <small id="dateHint">Formato: gg/mm/aaaa</small>
       <button class="btn" id="btn">🔍 Visualizza menù</button>
+      <button class="btn overview-btn" id="overviewBtn" type="button" disabled>📊 Overview del mese</button>
       <div class="loader" id="loader"><span class="spinner"></span>Caricamento menù…</div>
     </section>
 
     <div id="error"></div>
 
     <section id="resultCard" class="card result-card">
-      <button class="btn overview-btn" id="overviewBtn" type="button">📊 Overview del mese</button>
+      <div class="overview-modes" id="overviewModes" hidden aria-label="Modalità overview">
+        <button type="button" class="overview-mode-btn active" id="groupedViewBtn" aria-pressed="true">Raggruppati per pasto</button>
+        <button type="button" class="overview-mode-btn" id="dailyViewBtn" aria-pressed="false">Giorno per giorno</button>
+      </div>
       <div id="menuDate" class="menu-date"></div>
       <div id="menuGrid" class="menu-grid"></div>
     </section>
