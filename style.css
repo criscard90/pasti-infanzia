@@ -107,7 +107,8 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-.date-picker-btn {
+.date-picker-btn,
+.date-step-btn {
   flex: 0 0 48px;
   height: 48px;
   border: 2px solid #ddd6fe;
@@ -116,6 +117,21 @@ main {
   color: var(--ink);
   font-size: 1.2rem;
   cursor: pointer;
+}
+
+.date-step-btn {
+  flex-basis: 40px;
+  background: #fff;
+  color: var(--pink-dark);
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.date-picker-btn:disabled,
+.date-step-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 #datePicker {

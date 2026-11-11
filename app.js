@@ -10,6 +10,8 @@
   const dateInput = $('#date');
   const datePicker = $('#datePicker');
   const datePickerBtn = $('#datePickerBtn');
+  const previousDateBtn = $('#previousDateBtn');
+  const nextDateBtn = $('#nextDateBtn');
   const btn = $('#btn');
   const loader = $('#loader');
   const errorBox = $('#error');
@@ -358,6 +360,9 @@
     setError('');
     btn.disabled = true;
     dateInput.disabled = true;
+    datePickerBtn.disabled = true;
+    previousDateBtn.disabled = true;
+    nextDateBtn.disabled = true;
     overviewBtn.disabled = true;
     loader.style.display = 'block';
     const month = isoDate.slice(0, 7);
@@ -376,6 +381,9 @@
       loader.style.display = 'none';
       btn.disabled = false;
       dateInput.disabled = false;
+      datePickerBtn.disabled = false;
+      previousDateBtn.disabled = false;
+      nextDateBtn.disabled = false;
       overviewBtn.disabled = !hasMonthMenu;
       return;
     }
@@ -398,6 +406,9 @@
       loader.textContent = 'Caricamento menù…';
       btn.disabled = false;
       dateInput.disabled = false;
+      datePickerBtn.disabled = false;
+      previousDateBtn.disabled = false;
+      nextDateBtn.disabled = false;
       overviewBtn.disabled = !hasMonthMenu;
     }
   }
@@ -428,6 +439,24 @@
     setError('');
     loadMenu(datePicker.value);
   });
+  function shiftSelectedDate(offset) {
+    const isoDate = italianDateToIso(dateInput.value);
+    if (!isoDate) {
+      setError('Inserisci una data valida nel formato gg/mm/aaaa.');
+      dateInput.focus();
+      return;
+    }
+
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const nextDate = new Date(year, month - 1, day + offset);
+    const nextIsoDate = localIsoDate(nextDate);
+    dateInput.value = isoToItalianDate(nextIsoDate);
+    datePicker.value = nextIsoDate;
+    setError('');
+    loadMenu(nextIsoDate);
+  }
+  previousDateBtn.addEventListener('click', () => shiftSelectedDate(-1));
+  nextDateBtn.addEventListener('click', () => shiftSelectedDate(1));
   overviewBtn.addEventListener('click', () => {
     if (overviewVisible) {
       const selectedDate = italianDateToIso(dateInput.value);
