@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pasti-infanzia-v5';
+const CACHE_NAME = 'pasti-infanzia-v6';
 const SHELL = [
   './',
   './index.html',

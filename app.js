@@ -442,4 +442,9 @@
   dateInput.value = isoToItalianDate(today);
   datePicker.value = today;
   loadMenu(today);
+
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('./sw.js')
+      .catch((error) => console.error('Impossibile registrare il service worker:', error));
+  }
 })();
