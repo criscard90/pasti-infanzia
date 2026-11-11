@@ -200,25 +200,27 @@
   function renderOverview() {
     if (!currentMonthHtml) return;
     const days = parseMonthMenu(currentMonthHtml);
-    const foods = new Map();
+    const meals = new Map();
 
     Object.entries(days).forEach(([isoDate, day]) => {
       day.meals.forEach((meal) => {
         const isLunch = meal.label.trim().toLocaleLowerCase('it-IT') === 'pranzo';
+        const mealLabel = meal.label.trim();
+        if (!meals.has(mealLabel)) meals.set(mealLabel, new Map());
+        const foods = meals.get(mealLabel);
+
         meal.items.forEach((food) => {
           const normalized = food.replace(/\s+/g, ' ').trim();
           const key = normalized.toLocaleLowerCase('it-IT');
           if (!normalized || (isLunch && /^(pane|frutta)\b/i.test(normalized))) return;
           if (!foods.has(key)) foods.set(key, { name: normalized, dates: [] });
-          const dates = foods.get(key).dates;
+          const entry = foods.get(key);
+          const dates = entry.dates;
           if (dates[dates.length - 1] !== isoDate) dates.push(isoDate);
         });
       });
     });
 
-    const sortedFoods = Array.from(foods.values()).sort((a, b) =>
-      a.name.localeCompare(b.name, 'it')
-    );
     const [year, month, day] = Object.keys(days)[0].split('-').map(Number);
     const monthLabel = new Date(year, month - 1, day).toLocaleDateString('it-IT', {
       month: 'long',
@@ -227,23 +229,39 @@
 
     menuDate.textContent = `Overview · ${monthLabel}`;
     menuGrid.replaceChildren();
-    if (sortedFoods.length === 0) {
+    if (Array.from(meals.values()).every((foods) => foods.size === 0)) {
       const message = document.createElement('div');
       message.className = 'note-box';
       message.textContent = 'Non ci sono pietanze da riepilogare per questo mese.';
       menuGrid.appendChild(message);
     } else {
-      sortedFoods.forEach((food) => {
-        const item = document.createElement('article');
-        item.className = 'overview-item';
-        const name = document.createElement('strong');
-        name.className = 'overview-food';
-        name.textContent = food.name;
-        const dates = document.createElement('span');
-        dates.className = 'overview-dates';
-        dates.textContent = food.dates.map(isoToItalianDate).join(' · ');
-        item.append(name, dates);
-        menuGrid.appendChild(item);
+      meals.forEach((foods, mealLabel) => {
+        if (foods.size === 0) return;
+        const group = document.createElement('section');
+        group.className = 'overview-group';
+        const heading = document.createElement('h3');
+        heading.className = 'overview-group-title';
+        heading.textContent = mealLabel;
+        const items = document.createElement('div');
+        items.className = 'overview-group-items';
+
+        Array.from(foods.values())
+          .sort((a, b) => a.name.localeCompare(b.name, 'it'))
+          .forEach((food) => {
+            const item = document.createElement('article');
+            item.className = 'overview-item';
+            const name = document.createElement('strong');
+            name.className = 'overview-food';
+            name.textContent = food.name;
+            const dates = document.createElement('span');
+            dates.className = 'overview-dates';
+            dates.textContent = food.dates.map(isoToItalianDate).join(' · ');
+            item.append(name, dates);
+            items.appendChild(item);
+          });
+
+        group.append(heading, items);
+        menuGrid.appendChild(group);
       });
     }
 
