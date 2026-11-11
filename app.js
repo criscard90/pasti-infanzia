@@ -16,9 +16,6 @@
   const resultCard = $('#resultCard');
   const menuDate = $('#menuDate');
   const menuGrid = $('#menuGrid');
-  const rawBox = $('#rawBox');
-  const rawToggle = $('#rawToggle');
-  const rawToggleBtn = $('#rawToggleBtn');
   const overviewBtn = $('#overviewBtn');
   const memoryCache = new Map();
   let currentMonthHtml = '';
@@ -190,10 +187,6 @@
       });
     }
 
-    rawBox.textContent = html;
-    rawBox.style.display = 'none';
-    rawToggle.style.display = 'block';
-    rawToggleBtn.textContent = 'Visualizza sorgente';
     resultCard.style.display = 'flex';
   }
 
@@ -371,12 +364,6 @@
     }
     renderOverview();
   });
-  rawToggleBtn.addEventListener('click', () => {
-    const show = rawBox.style.display === 'none';
-    rawBox.style.display = show ? 'block' : 'none';
-    rawToggleBtn.textContent = show ? 'Nascondi sorgente' : 'Visualizza sorgente';
-  });
-
   const today = localIsoDate(new Date());
   dateInput.value = isoToItalianDate(today);
   datePicker.value = today;

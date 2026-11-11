@@ -298,39 +298,6 @@ footer {
 
 footer a { color: var(--pink-dark); text-decoration: none; }
 
-.raw-toggle {
-  margin-top: 10px;
-  text-align: center;
-}
-
-.raw-toggle button {
-  background: transparent;
-  border: 1px dashed #ddd6fe;
-  color: var(--blue);
-  padding: 6px 12px;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.raw-toggle button:hover { background: #eef2ff; }
-
-.raw-box {
-  margin-top: 8px;
-  background: #0b0c10;
-  color: #a4b6c7;
-  padding: 12px 14px;
-  border-radius: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  max-height: 240px;
-  overflow: auto;
-  display: none;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 @media (max-width: 480px) {
   .card { padding: 16px 14px; }
   header h1 { font-size: 1.35rem; }
