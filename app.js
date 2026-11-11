@@ -3,7 +3,7 @@
   const PROXY_URL = 'https://pasti-infanzia.cristian-cardillo-it.workers.dev';
   const MUNICIPIO = '8';
   const CICLO = '4';
-  const CACHE_PREFIX = 'pasti-infanzia-menu-mese-v1';
+  const CACHE_PREFIX = 'pasti-infanzia-menu-mese-v2';
   const CACHE_TTL = 12 * 60 * 60 * 1000;
 
   const $ = (selector) => document.querySelector(selector);
@@ -284,7 +284,9 @@
     });
     if (!response.ok) throw new Error(`Il servizio ha risposto con HTTP ${response.status}.`);
 
-    const html = await response.text();
+    const contentType = response.headers.get('content-type') || '';
+    const charset = contentType.match(/charset\s*=\s*["']?([^;"'\s]+)/i)?.[1] || 'utf-8';
+    const html = new TextDecoder(charset).decode(await response.arrayBuffer());
     if (!html.trim()) throw new Error('Il servizio ha restituito una risposta vuota.');
     parseMonthMenu(html);
     return html;
